@@ -46,14 +46,19 @@ Bu yazılım, **Business Source License 1.1 (BSL 1.1)** şartları kapsamında k
 Kurulum adımı gerektirmez. Doğrudan yerel ES Module (ESM) mimarisi üzerinden entegre edilir:
 
 ```javascript
-import { BiomorphicEngine } from './src/core.js';
+import BiomorphicEngine from './BiomorphicEngine.js';
 
-// Motor kurumsal parametrelerle başlatılır ve ayar objesi dondurulur
-const engine = new BiomorphicEngine({
-  theme: 'corporate-grounded',
-  smoothness: 0.850
+// Motor başlatılır
+const engine = new BiomorphicEngine();
+
+// Tek kanal (bilişsel yük) – legacy
+engine.ingest(78.345);
+
+// Çok kanallı telemetri güncellemesi (Veri giriş anında sterilize edilir)
+engine.ingest({
+  cognitiveLoad: 78.345,
+  focus: 45.000,
+  anxiety: 30.200,
+  sleepDeprivation: 15.800
 });
-
-// Telemetri verisi güncellenir (Veri giriş anında sterilize edilir)
-engine.updateSystemicLoad(78.345);
 ```
