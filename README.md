@@ -1,5 +1,7 @@
 # Biomorphic UI Core — Dinamik Arayüz Stabilizasyon Motoru
 
+**GitHub:** https://github.com/runtime-stranger/biomorphic-engine
+
 Harici paket bağımlılığı bulunmayan (zero-dependency), kurumsal düzeyde siber güvenlik mimarisine sahip ve sürekli veri girdilerine göre arayüz parametrelerini optimize eden ECMAScript tabanlı kütüphane.
 
 ---
