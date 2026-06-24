@@ -1,13 +1,28 @@
 /**
- * @fileoverview BiomorphicEngine — A neuromorphic UI modulation engine that
- * dynamically adjusts CSS Custom Properties on the document root based on
- * human neuro-cognitive load and systemic fatigue vectors.
+ * @fileoverview BiomorphicEngine v2 — Neuromorphic UI Modulation Engine
  *
- * Employs 1/f (pink) and 1/f² (brown) noise distribution models for all
- * decay curves. Zero external dependencies. Runs on native ECMAScript modules.
+ * Dynamically adjusts CSS Custom Properties on the document root based on
+ * multi-channel human neuro-cognitive telemetry: cognitive load, focus,
+ * anxiety, and sleep deprivation.
+ *
+ * All decay curves use 1/f (pink) and 1/f² (brown) noise distribution models
+ * for biologically-plausible, non-linear interpolation. Zero external
+ * dependencies. Native ECMAScript module.
+ *
+ * ## CSS Custom Properties set:
+ *   --bui-bg-color         → rgb(R, G, B)
+ *   --bui-accent-color     → rgb(R, G, B)
+ *   --bui-font-tracking    → rem
+ *   --bui-transition-speed → ms
+ *   --bui-saturation       → saturate(%)  (0–1)
+ *   --bui-contrast         → contrast ratio (1.5–4.5)
+ *   --bui-grid-gap         → rem
+ *   --bui-blur             → px
+ *   --bui-density          → scale (0.5–1.0)
+ *   --bui-shadow           → shadow alpha (0–1)
  *
  * @module BiomorphicEngine
- * @license MIT
+ * @license BSL 1.1
  * @copyright (c) 2024-2046
  */
 
@@ -35,37 +50,44 @@ function r3(v) { return Math.round(v * P3) / P3; }
 function clamp(v, mn, mx) { return v < mn ? mn : v > mx ? mx : v; }
 
 // =============================================================================
-// BiomorphicEngine
+// BiomorphicEngine v2
 // =============================================================================
 
 /**
- * A neuromorphic engine that ingests cognitive-load telemetry and modulates
- * CSS Custom Properties on the document root using biologically-plausible 1/f
- * and 1/f² noise decay models.
+ * BiomorphicEngine v2 — Multi-channel neuromorphic UI modulation engine.
  *
- * ## Key design properties:
+ * **Input channels** (all 0–100):
+ * - `cognitiveLoad`    — Mental effort / task difficulty
+ * - `focus`            — Concentration level (inverse of distraction)
+ * - `anxiety`          — Stress / anxiety level
+ * - `sleepDeprivation` — Fatigue from insufficient rest
  *
- * - **Zero dependencies** — uses only native ECMAScript/Web APIs.
- * - **Zero XSS surface** — DOM interaction exclusively via
- *   `Element.style.setProperty()`; no `eval`, `new Function`, or `innerHTML`.
- * - **Zero idle CPU** — `requestAnimationFrame` loop auto-terminates when
- *   target values converge (threshold < 0.005).
- * - **Immutable config** — static schema is deeply `Object.freeze()`d against
- *   prototype pollution in untrusted contexts.
- * - **Fail-safe** — invalid telemetry payloads are silently discarded; last
- *   good state is preserved.
+ * **Derived neural states:**
+ * - `fatigue` — Long-term accumulated strain (blends cognitive load,
+ *   sleep deprivation, and anxiety)
+ * - `arousal` — Physiological alertness (cognitive load + anxiety)
+ * - `valence` — Emotional polarity (focus vs anxiety)
+ *
+ * **CSS outputs:**
+ * All previous variables plus saturation, contrast, grid-gap, blur,
+ * density, and shadow intensity.
  *
  * @example
  * ```js
  * import BiomorphicEngine from './BiomorphicEngine.js';
+ * const eng = new BiomorphicEngine();
  *
- * const engine = new BiomorphicEngine();
- * engine.ingest(42.500);
- * engine.ingest(87.300);
+ * // Single-channel (legacy)
+ * eng.ingest(72.5);
  *
- * const { cognitiveLoad, fatigue } = engine.getState();
+ * // Multi-channel object
+ * eng.ingest({ cognitiveLoad: 72.5, anxiety: 45, focus: 30 });
  *
- * engine.destroy();
+ * const state = eng.getState();
+ * // { cognitiveLoad, focus, anxiety, sleepDeprivation,
+ * //   fatigue, arousal, valence }
+ *
+ * eng.destroy();
  * ```
  */
 export default class BiomorphicEngine {
@@ -82,10 +104,13 @@ export default class BiomorphicEngine {
     CONVERGENCE_THRESHOLD: 0.005,
     MAX_FRAMES: 30000,
     PINK_OCTAVES: 7,
-
     CSS_PREFIX: '--bui-',
+    NUM_CHANNELS: 4,
 
-    /** Normal (low-fatigue) visual target. */
+    /** Channel names (index maps to filter/target/output arrays). */
+    CHANNELS: Object.freeze(['cognitiveLoad', 'focus', 'anxiety', 'sleepDeprivation']),
+
+    /** Normal (low-fatigue, low-anxiety) visual target. */
     NORMAL: Object.freeze({
       BG:       Object.freeze([248, 249, 250]),
       ACCENT:   Object.freeze([0, 102, 204]),
@@ -93,7 +118,7 @@ export default class BiomorphicEngine {
       SPEED:    200
     }),
 
-    /** Neon-Gothic (high-fatigue) protective visual target. */
+    /** Neon-Gothic (high-fatigue, high-anxiety) protective target. */
     NEON_GOTHIC: Object.freeze({
       BG:       Object.freeze([13, 14, 16]),
       ACCENT:   Object.freeze([30, 59, 47]),
@@ -109,7 +134,7 @@ export default class BiomorphicEngine {
       ULTRA_SLOW: 0.005
     }),
 
-    /** Weights for combining filter stages into perceived cognitive load. */
+    /** Weights for combining filter stages into perceived value. */
     WEIGHTS: Object.freeze({
       FAST:       0.40,
       MEDIUM:     0.30,
@@ -122,21 +147,31 @@ export default class BiomorphicEngine {
   // Instance fields
   // ---------------------------------------------------------------------------
 
-  /** @type {number} Current smoothed cognitive load (0–100, 3 decimals). */
-  #cognitiveLoad = 0;
-  /** @type {number} Current fatigue estimate (0–100, 3 decimals). */
-  #fatigue = 0;
-  /** @type {number} Last validated telemetry target (0–100, 3 decimals). */
-  #target = 0;
+  /**
+   * Multi-channel filter states.
+   * `#filter[channelIdx][stageIdx]` where stageIdx: 0=fast, 1=medium, 2=slow, 3=ultra-slow.
+   * @type {number[][]}
+   */
+  #filter;
 
-  /** Fast IIR filter state. @type {number} */
-  #f1 = 0;
-  /** Medium IIR filter state. @type {number} */
-  #f2 = 0;
-  /** Slow IIR filter state. @type {number} */
-  #f3 = 0;
-  /** Ultra-slow IIR filter state (1/f² integrator). @type {number} */
-  #f4 = 0;
+  /**
+   * Target values per channel (0–100, 3 decimals).
+   * @type {number[]}
+   */
+  #target;
+
+  /**
+   * Smoothed output values per channel (0–100, 3 decimals).
+   * @type {number[]}
+   */
+  #output;
+
+  /** @type {number} Derived fatigue (0–100). */
+  #fatigue = 0;
+  /** @type {number} Derived arousal (0–100). */
+  #arousal = 0;
+  /** @type {number} Derived valence (0–100). */
+  #valence = 0;
 
   /** Brown noise random-walk accumulator. @type {number} */
   #brownAccum = 0;
@@ -163,18 +198,29 @@ export default class BiomorphicEngine {
 
   /**
    * Creates a new BiomorphicEngine instance and immediately writes the normal
-   * (low-fatigue) visual state to the document root CSS Custom Properties.
+   * (low-fatigue, low-anxiety) visual state to the document root CSS Custom
+   * Properties.
    *
    * @param {Partial<BiomorphicConfig>} [_config={}] - Optional overrides
-   *     (currently reserved for forward-compatibility; unknown keys are
-   *     silently ignored).
+   *     (reserved for forward-compatibility).
    */
   constructor(_config = {}) {
+    const NC = BiomorphicEngine.#CFG.NUM_CHANNELS;
+    this.#filter = [];
+    this.#target = [];
+    this.#output = [];
+    for (let i = 0; i < NC; i++) {
+      this.#filter.push([0, 0, 0, 0]);
+      this.#target.push(0);
+      this.#output.push(0);
+    }
+
     const N = BiomorphicEngine.#CFG.NORMAL;
     this.#applyCSS(
       N.BG[0], N.BG[1], N.BG[2],
       N.ACCENT[0], N.ACCENT[1], N.ACCENT[2],
-      N.TRACKING, N.SPEED
+      N.TRACKING, N.SPEED,
+      1.0, 4.5, 0.5, 0, 1.0, 0
     );
   }
 
@@ -183,51 +229,84 @@ export default class BiomorphicEngine {
   // ---------------------------------------------------------------------------
 
   /**
-   * Ingests a single cognitive-load or systemic-fatigue telemetry sample.
+   * Ingests telemetry data — either a single cognitive-load number (legacy)
+   * or a multi-channel object.
    *
-   * ## Processing pipeline:
-   *
-   * 1. **Validation** — Rejects non-numbers, NaN, ±Infinity, objects, arrays,
-   *    and any value whose string representation indicates prototype tampering
-   *    (`__proto__`, `constructor`, `prototype`).
-   * 2. **Sanitisation** — Clamps to [`LOAD_MIN`, `LOAD_MAX`].
-   * 3. **Quantisation** — Rounds to exactly 3 decimal places.
-   *
-   * On rejection the engine silently preserves its last known-good state
-   * (fail-safe). On acceptance the interpolation loop is scheduled if idle.
-   *
-   * @param {*} telemetry - Raw cognitive load or fatigue measurement.
-   * @returns {this} The engine instance (fluent API).
-   *
-   * @example
+   * **Single number** (backward compatible):
    * ```js
-   * engine.ingest(73.200);
-   * engine.ingest(42);       // integer accepted
-   * engine.ingest('abc');    // rejected, no-op
-   * engine.ingest(NaN);      // rejected, no-op
+   * engine.ingest(72.5);  // sets cognitiveLoad
    * ```
+   *
+   * **Multi-channel object:**
+   * ```js
+   * engine.ingest({
+   *   cognitiveLoad: 72.5,
+   *   focus: 30,
+   *   anxiety: 85,
+   *   sleepDeprivation: 60
+   * });
+   * ```
+   *
+   * Only keys matching valid channel names are processed. All values are
+   * validated (type, range, prototype-pollution) independently. Invalid
+   * channels or values are silently ignored (fail-safe).
+   *
+   * @param {number|BiomorphicInput} telemetry - Cognitive load or neural state.
+   * @returns {this} The engine instance (fluent API).
    */
   ingest(telemetry) {
-    if (!this.#validate(telemetry)) return this;
+    // --- Single number (legacy) → cognitiveLoad ---
+    if (typeof telemetry === 'number') {
+      if (!this.#validateNumber(telemetry)) return this;
+      this.#target[0] = r3(this.#sanitize(telemetry));
+      this.#scheduleFrame();
+      return this;
+    }
 
-    this.#target = r3(this.#sanitize(/** @type {number} */(telemetry)));
-    this.#scheduleFrame();
+    // --- Multi-channel object ---
+    if (telemetry && typeof telemetry === 'object' && !Array.isArray(telemetry)) {
+      if (!this.#validateObject(telemetry)) return this;
+
+      let changed = false;
+      const channels = BiomorphicEngine.#CFG.CHANNELS;
+
+      for (let i = 0; i < channels.length; i++) {
+        const val = telemetry[channels[i]];
+        if (typeof val === 'number' && this.#validateNumber(val)) {
+          this.#target[i] = r3(this.#sanitize(val));
+          changed = true;
+        }
+      }
+
+      if (changed) this.#scheduleFrame();
+      return this;
+    }
+
     return this;
   }
 
   /**
-   * Returns a snapshot of the engine's current internal state.
+   * Returns a snapshot of the engine's current neural state.
    *
-   * @returns {BiomorphicState} Current {@link cognitiveLoad} and
-   *     {@link fatigue}, each in [0, 100].
+   * @returns {BiomorphicState} All channels and derived states (0–100).
    *
    * @example
    * ```js
-   * const { cognitiveLoad, fatigue } = engine.getState();
+   * const s = engine.getState();
+   * // { cognitiveLoad, focus, anxiety, sleepDeprivation,
+   * //   fatigue, arousal, valence }
    * ```
    */
   getState() {
-    return { cognitiveLoad: this.#cognitiveLoad, fatigue: this.#fatigue };
+    return {
+      cognitiveLoad:    this.#output[0],
+      focus:            this.#output[1],
+      anxiety:          this.#output[2],
+      sleepDeprivation: this.#output[3],
+      fatigue:          this.#fatigue,
+      arousal:          this.#arousal,
+      valence:          this.#valence
+    };
   }
 
   /**
@@ -246,8 +325,15 @@ export default class BiomorphicEngine {
     if (this.#rafId !== null) { cancelAnimationFrame(this.#rafId); this.#rafId = null; }
     this.#boundTick = null;
     this.#running = false;
-    this.#cognitiveLoad = 0; this.#fatigue = 0; this.#target = 0;
-    this.#f1 = 0; this.#f2 = 0; this.#f3 = 0; this.#f4 = 0;
+
+    const NC = BiomorphicEngine.#CFG.NUM_CHANNELS;
+    for (let i = 0; i < NC; i++) {
+      this.#target[i] = 0;
+      this.#output[i] = 0;
+      const f = this.#filter[i];
+      f[0] = 0; f[1] = 0; f[2] = 0; f[3] = 0;
+    }
+    this.#fatigue = 0; this.#arousal = 0; this.#valence = 0;
     this.#brownAccum = 0;
     this.#pinkVals.fill(0); this.#pinkCtr = 0;
     this.#frameCount = 0; this.#lastFrameTime = 0;
@@ -258,30 +344,35 @@ export default class BiomorphicEngine {
   // ---------------------------------------------------------------------------
 
   /**
-   * Validates a telemetry value for type-safety and security.
+   * Validates a single numeric telemetry value.
    *
-   * Rejection criteria:
-   * - Not a `number` primitive.
-   * - `NaN` or non-finite (`Infinity`, `-Infinity`).
-   * - Object, array, or function (prototype-pollution vector).
-   * - String coercion contains `__proto__`, `constructor`, or `prototype`
-   *   (defence-in-depth against prototype tampering).
+   * Rejects: non-number, NaN, Infinity, objects. Also rejects values whose
+   * string coercion contains prototype-tampering keywords.
    *
-   * @param {*} v - Raw value to validate.
-   * @returns {boolean} `true` if the value is safe to process.
+   * @param {*} v - Value to validate.
+   * @returns {boolean} `true` if the value is safe.
    */
-  #validate(v) {
+  #validateNumber(v) {
     if (typeof v !== 'number' || !Number.isFinite(v)) return false;
-    if (v !== null && typeof v === 'object') return false;
-
     const s = String(v);
     if (s.includes('__proto__') || s.includes('constructor') || s.includes('prototype')) return false;
-
     return true;
   }
 
   /**
-   * Sanitises a validated telemetry value by clamping to [LOAD_MIN, LOAD_MAX].
+   * Validates an input object for prototype-pollution vectors.
+   *
+   * @param {Object} obj - Input object.
+   * @returns {boolean} `true` if the object is safe.
+   */
+  #validateObject(obj) {
+    const s = String(obj);
+    if (s.includes('__proto__') || s.includes('constructor') || s.includes('prototype')) return false;
+    return true;
+  }
+
+  /**
+   * Sanitises a validated numeric value by clamping to [LOAD_MIN, LOAD_MAX].
    *
    * @param {number} v - Validated numeric value.
    * @returns {number} Clamped value.
@@ -298,21 +389,15 @@ export default class BiomorphicEngine {
    * Generates a pink noise (1/f) sample via the Voss-McCartney multi-octave
    * algorithm.
    *
-   * Octave `i` holds a uniform-random value in [-1, 1] for `2^i` consecutive
-   * samples. The sum across all octaves, divided by the octave count, yields
-   * a signal with approximately 1/f power spectral density.
-   *
    * @returns {number} Pink noise sample in [-1, 1] (3 decimals).
    */
   #pinkNoise() {
     const O = BiomorphicEngine.#CFG.PINK_OCTAVES;
     let s = 0;
-
     for (let i = 0; i < O; i++) {
       if (this.#pinkCtr % (1 << i) === 0) this.#pinkVals[i] = Math.random() * 2 - 1;
       s += this.#pinkVals[i];
     }
-
     this.#pinkCtr++;
     return r3(clamp(s / O, -1, 1));
   }
@@ -320,87 +405,79 @@ export default class BiomorphicEngine {
   /**
    * Generates a brown noise (1/f²) sample via a random-walk integrator.
    *
-   * Each step adds a uniform-random delta of ±0.025. The accumulator is
-   * softly reflected at ±1 to avoid hard-clipping artefacts.
-   *
    * @returns {number} Brown noise sample in [-1, 1] (3 decimals).
    */
   #brownNoise() {
     this.#brownAccum = r3(this.#brownAccum + r3((Math.random() * 2 - 1) * 0.025));
-
     if (this.#brownAccum > 1)      this.#brownAccum = r3(2 - this.#brownAccum);
     else if (this.#brownAccum < -1) this.#brownAccum = r3(-2 - this.#brownAccum);
-
     return this.#brownAccum;
   }
 
   // ---------------------------------------------------------------------------
-  // Core processing (private)
+  // Multi-channel filter (private)
   // ---------------------------------------------------------------------------
 
   /**
-   * Runs the multi-time-constant recursive filter that gives the system its
-   * 1/f (pink) frequency response.
+   * Runs the multi-time-constant recursive filter across all input channels.
    *
-   * Four first-order IIR stages run in parallel:
+   * Each channel processes through four IIR stages (fast → ultra-slow),
+   * producing a 1/f-like spectral response. The weighted combination gives
+   * the filtered output for that channel.
    *
-   * | Stage      | α       | τ (frames) | Function          |
-   * |------------|---------|------------|-------------------|
-   * | Fast       | 0.250   | ~3         | Immediate changes |
-   * | Medium     | 0.080   | ~12        | Short-term trend  |
-   * | Slow       | 0.020   | ~50        | Medium-term trend |
-   * | Ultra-slow | 0.005   | ~200       | Long-term drift   |
-   *
-   * The weighted sum (`WEIGHTS`) produces the perceived cognitive load.
-   * The `fatigue` estimate blends the ultra-slow integrator (1/f² character)
-   * with the instantaneous perceived load.
-   *
-   * All arithmetic is rounded to 3 decimal places.
+   * Derived neural states (fatigue, arousal, valence) are computed from
+   * the multi-channel output vector.
    *
    * @returns {void}
    */
   #processFilter() {
-    const tgt = this.#target;
     const { FAST, MEDIUM, SLOW, ULTRA_SLOW } = BiomorphicEngine.#CFG.FILTER;
     const { FAST: W1, MEDIUM: W2, SLOW: W3, ULTRA_SLOW: W4 } = BiomorphicEngine.#CFG.WEIGHTS;
+    const NC = BiomorphicEngine.#CFG.NUM_CHANNELS;
 
-    this.#f1 = r3(this.#f1 * (1 - FAST)      + tgt * FAST);
-    this.#f2 = r3(this.#f2 * (1 - MEDIUM)     + tgt * MEDIUM);
-    this.#f3 = r3(this.#f3 * (1 - SLOW)       + tgt * SLOW);
-    this.#f4 = r3(this.#f4 * (1 - ULTRA_SLOW) + tgt * ULTRA_SLOW);
+    for (let c = 0; c < NC; c++) {
+      const tgt = this.#target[c];
+      const f = this.#filter[c];
 
-    const perceived = r3(this.#f1 * W1 + this.#f2 * W2 + this.#f3 * W3 + this.#f4 * W4);
-    const fatigue   = r3(this.#f4 * 0.70 + perceived * 0.30);
+      f[0] = r3(f[0] * (1 - FAST)      + tgt * FAST);
+      f[1] = r3(f[1] * (1 - MEDIUM)     + tgt * MEDIUM);
+      f[2] = r3(f[2] * (1 - SLOW)       + tgt * SLOW);
+      f[3] = r3(f[3] * (1 - ULTRA_SLOW) + tgt * ULTRA_SLOW);
 
-    this.#cognitiveLoad = r3(clamp(perceived, 0, 100));
-    this.#fatigue       = r3(clamp(fatigue,   0, 100));
+      this.#output[c] = r3(clamp(
+        f[0] * W1 + f[1] * W2 + f[2] * W3 + f[3] * W4,
+        0, 100
+      ));
+    }
+
+    const cl = this.#output[0];
+    const focus = this.#output[1];
+    const anxiety = this.#output[2];
+    const sleepDep = this.#output[3];
+
+    // Fatigue: long-term accumulation (ultra-slow cognitive load)
+    // + sleep deprivation + anxiety component
+    this.#fatigue = r3(clamp(
+      this.#filter[0][3] * 0.35 +   // ultra-slow drift
+      cl * 0.15 +                   // current cognitive load
+      sleepDep * 0.30 +             // sleep deprivation
+      anxiety * 0.20,               // anxiety contribution
+      0, 100
+    ));
+
+    // Arousal: physiological alertness
+    this.#arousal = r3(clamp(cl * 0.50 + anxiety * 0.50, 0, 100));
+
+    // Valence: emotional polarity (positive = calm focus)
+    this.#valence = r3(clamp(focus * 0.65 - anxiety * 0.35 + 50, 0, 100));
   }
 
-  /**
-   * Computes a noise-modulated decay factor used to drive the non-linear
-   * interpolation.
-   *
-   * A combined pink + brown noise signal is scaled to produce a decay rate
-   * in `[0.02, 0.08]`, ensuring organic, non-constant-velocity motion toward
-   * the target each frame.
-   *
-   * @returns {number} Decay factor in [0.02, 0.08] (3 decimals).
-   */
-  #decayFactor() {
-    const m = r3(clamp(0.50 * this.#pinkNoise() + 0.50 * this.#brownNoise() + 0.50, 0, 1));
-    return r3(0.02 + m * 0.06);
-  }
+  // ---------------------------------------------------------------------------
+  // Visual mapping (private)
+  // ---------------------------------------------------------------------------
 
   /**
-   * Applies a non-linear power-law shaping to the interpolation factor `t`.
-   *
-   * The exponent γ is modulated by the pink noise sample:
-   * ```
-   * γ = clamp(0.85 + pinkNoise × 0.30, 0.10, 2.00)
-   * ```
-   *
-   * The result is `t^γ`, which is concave when γ < 1 and convex when γ > 1.
-   * This ensures **no linear interpolation path** exists in the visual output.
+   * Applies non-linear power-law shaping to an interpolation factor `t`.
    *
    * @param {number} t - Interpolation factor in [0, 1].
    * @returns {number} Shaped factor in [0, 1] (3 decimals).
@@ -411,6 +488,87 @@ export default class BiomorphicEngine {
     return r3(Math.pow(ts, g));
   }
 
+  /**
+   * Maps the current neural state vector to all CSS Custom Property values.
+   *
+   * Productions:
+   * | Variable                | Driven by                              | Range       |
+   * |-------------------------|----------------------------------------|-------------|
+   * | --bui-bg-color          | fatigue (normal → neon-gothic)        | RGB         |
+   * | --bui-accent-color      | fatigue + arousal (normal → neon-gothic)| RGB        |
+   * | --bui-font-tracking     | fatigue + anxiety                      | 0.02–0.10rem|
+   * | --bui-transition-speed  | fatigue                                | 200–750ms   |
+   * | --bui-saturation        | anxiety + sleepDep + fatigue            | 0.10–1.00   |
+   * | --bui-contrast          | focus (attenuated by fatigue)           | 1.5–4.5     |
+   * | --bui-grid-gap          | anxiety + fatigue                       | 0.5–2.0rem  |
+   * | --bui-blur              | fatigue + anxiety (calming blur)        | 0–12px      |
+   * | --bui-density           | focus (high = dense)                    | 0.5–1.0     |
+   * | --bui-shadow            | anxiety                                 | 0–0.30 alpha|
+   *
+   * @returns {BiomorphicVisuals} All computed visual values.
+   */
+  #computeVisuals() {
+    const cl = this.#output[0];
+    const focus = this.#output[1];
+    const anxiety = this.#output[2];
+    const sleepDep = this.#output[3];
+    const fatigueT = r3(clamp(this.#fatigue / 100, 0, 1));
+
+    // ---- Core palette (existing) ----
+    const N = BiomorphicEngine.#CFG.NORMAL;
+    const G = BiomorphicEngine.#CFG.NEON_GOTHIC;
+    const ts = this.#shapeNonLinear(fatigueT);
+
+    const bgR = r3(N.BG[0] + (G.BG[0] - N.BG[0]) * ts);
+    const bgG = r3(N.BG[1] + (G.BG[1] - N.BG[1]) * ts);
+    const bgB = r3(N.BG[2] + (G.BG[2] - N.BG[2]) * ts);
+
+    // Accent: blend fatigue and arousal
+    const accentT = r3(clamp((this.#fatigue * 0.60 + this.#arousal * 0.40) / 100, 0, 1));
+    const accentTs = this.#shapeNonLinear(accentT);
+    const accR = r3(N.ACCENT[0] + (G.ACCENT[0] - N.ACCENT[0]) * accentTs);
+    const accG = r3(N.ACCENT[1] + (G.ACCENT[1] - N.ACCENT[1]) * accentTs);
+    const accB = r3(N.ACCENT[2] + (G.ACCENT[2] - N.ACCENT[2]) * accentTs);
+
+    // Font tracking: fatigue + anxiety
+    const trackRaw = r3(0.02 + ((this.#fatigue * 0.50 + anxiety * 0.50) / 100) * 0.08);
+    const track = r3(clamp(trackRaw, 0.02, 0.10));
+
+    // Transition speed: fatigue-driven
+    const speed = r3(clamp(200 + (this.#fatigue / 100) * 550, 200, 750));
+
+    // ---- New CSS variables ----
+
+    // Saturation: high anxiety/sleepDep/fatigue → desaturated
+    const satRaw = r3(1.00 - (anxiety * 0.004 + sleepDep * 0.003 + this.#fatigue * 0.003));
+    const saturation = r3(clamp(satRaw, 0.10, 1.00));
+
+    // Contrast: high focus → higher contrast, attenuated by fatigue
+    const contRaw = r3(1.50 + (focus / 100) * 3.00 - (this.#fatigue / 100) * 0.50);
+    const contrast = r3(clamp(contRaw, 1.50, 4.50));
+
+    // Grid gap: anxiety + fatigue → more breathing room
+    const gapRaw = r3(0.50 + (anxiety * 0.005 + this.#fatigue * 0.005));
+    const gridGap = r3(clamp(gapRaw, 0.50, 2.00));
+
+    // Blur: fatigue + anxiety → calming blur
+    const blurRaw = r3(this.#fatigue * 0.006 + anxiety * 0.004);
+    const blur = r3(clamp(blurRaw, 0, 12));
+
+    // Layout density: high focus → compact; low focus → spacious
+    const density = r3(clamp(1.00 - (100 - focus) * 0.005, 0.50, 1.00));
+
+    // Shadow: anxiety → more dramatic shadows
+    const shadowAlpha = r3(clamp(anxiety * 0.003, 0, 0.30));
+
+    return {
+      bgR, bgG, bgB,
+      accR, accG, accB,
+      track, speed,
+      saturation, contrast, gridGap, blur, density, shadowAlpha
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Animation loop (private)
   // ---------------------------------------------------------------------------
@@ -419,15 +577,12 @@ export default class BiomorphicEngine {
    * Single tick of the `requestAnimationFrame` interpolation loop.
    *
    * Pipeline per frame:
-   * 1. Run the multi-time-constant filter → updates cognitive load & fatigue.
-   * 2. Derive base interpolation factor `t` from load + fatigue.
-   * 3. Shape `t` via the noise-modulated power-law function.
-   * 4. Compute CSS property values (bg-color, accent-color, font-tracking,
-   *    transition-speed).
-   * 5. Write to document root via `style.setProperty()`.
-   * 6. Check convergence. If the normalised difference from the target is
-   *    below `CONVERGENCE_THRESHOLD` (or `MAX_FRAMES` is exceeded), stop.
-   * 7. Otherwise schedule the next frame.
+   * 1. Process multi-channel filter → neural state vector.
+   * 2. Map neural state → all CSS variable values.
+   * 3. Write to document root via `style.setProperty()`.
+   * 4. Check multi-channel convergence. If all channels are within threshold
+   *    (or MAX_FRAMES exceeded), stop.
+   * 5. Otherwise schedule the next frame.
    *
    * @returns {void}
    */
@@ -435,35 +590,32 @@ export default class BiomorphicEngine {
     if (!this.#running) return;
 
     this.#processFilter();
+    const v = this.#computeVisuals();
 
-    const t  = r3(clamp((this.#cognitiveLoad * 0.40 + this.#fatigue * 0.60) / 100, 0, 1));
-    const ts = this.#shapeNonLinear(t);
+    this.#applyCSS(
+      v.bgR, v.bgG, v.bgB,
+      v.accR, v.accG, v.accB,
+      v.track, v.speed,
+      v.saturation, v.contrast, v.gridGap, v.blur, v.density, v.shadowAlpha
+    );
 
-    const N = BiomorphicEngine.#CFG.NORMAL;
-    const G = BiomorphicEngine.#CFG.NEON_GOTHIC;
-
-    const bgR   = r3(N.BG[0] + (G.BG[0] - N.BG[0]) * ts);
-    const bgG   = r3(N.BG[1] + (G.BG[1] - N.BG[1]) * ts);
-    const bgB   = r3(N.BG[2] + (G.BG[2] - N.BG[2]) * ts);
-    const accR  = r3(N.ACCENT[0] + (G.ACCENT[0] - N.ACCENT[0]) * ts);
-    const accG  = r3(N.ACCENT[1] + (G.ACCENT[1] - N.ACCENT[1]) * ts);
-    const accB  = r3(N.ACCENT[2] + (G.ACCENT[2] - N.ACCENT[2]) * ts);
-    const track = r3(N.TRACKING + (G.TRACKING - N.TRACKING) * ts);
-    const speed = r3(N.SPEED   + (G.SPEED   - N.SPEED)     * ts);
-
-    this.#applyCSS(bgR, bgG, bgB, accR, accG, accB, track, speed);
-
-    // Convergence check: |cognitiveLoad − target| normalised to [0, 1]
-    const diff = Math.abs(this.#cognitiveLoad - this.#target) / 100;
-    const thr  = BiomorphicEngine.#CFG.CONVERGENCE_THRESHOLD;
+    // Multi-channel convergence check
+    const NC = BiomorphicEngine.#CFG.NUM_CHANNELS;
+    const thr = BiomorphicEngine.#CFG.CONVERGENCE_THRESHOLD;
+    let maxDiff = 0;
+    for (let i = 0; i < NC; i++) {
+      const diff = Math.abs(this.#output[i] - this.#target[i]) / 100;
+      if (diff > maxDiff) maxDiff = diff;
+    }
 
     this.#frameCount++;
 
-    if (diff < thr || this.#frameCount >= BiomorphicEngine.#CFG.MAX_FRAMES) {
+    if (maxDiff < thr || this.#frameCount >= BiomorphicEngine.#CFG.MAX_FRAMES) {
       this.#applyCSS(
-        Math.round(bgR), Math.round(bgG), Math.round(bgB),
-        Math.round(accR), Math.round(accG), Math.round(accB),
-        +track.toFixed(3), Math.round(speed)
+        Math.round(v.bgR), Math.round(v.bgG), Math.round(v.bgB),
+        Math.round(v.accR), Math.round(v.accG), Math.round(v.accB),
+        +v.track.toFixed(3), Math.round(v.speed),
+        v.saturation, v.contrast, v.gridGap, v.blur, v.density, v.shadowAlpha
       );
       this.#stop();
       return;
@@ -473,30 +625,28 @@ export default class BiomorphicEngine {
   }
 
   /**
-   * Writes visual values to CSS Custom Properties on the document root using
-   * `Element.style.setProperty()` exclusively.
+   * Writes visual state to CSS Custom Properties on the document root.
    *
-   * - No `innerHTML`, `eval`, or `new Function` is used anywhere.
-   * - If `document.documentElement` is unavailable (SSR, worker) the method
-   *   silently returns.
+   * All values are injected exclusively via `Element.style.setProperty()`.
+   * No `innerHTML`, `eval`, or `new Function` is used anywhere.
    *
-   * CSS variables set:
-   * - `--bui-bg-color`          → `rgb(R, G, B)`
-   * - `--bui-accent-color`      → `rgb(R, G, B)`
-   * - `--bui-font-tracking`     → `<val>rem`
-   * - `--bui-transition-speed`  → `<val>ms`
-   *
-   * @param {number} br - Background red   (0–255).
-   * @param {number} bg - Background green (0–255).
-   * @param {number} bb - Background blue  (0–255).
-   * @param {number} ar - Accent red       (0–255).
-   * @param {number} ag - Accent green     (0–255).
-   * @param {number} ab - Accent blue      (0–255).
-   * @param {number} tr - Letter-spacing (rem).
-   * @param {number} sp - Transition duration (ms).
+   * @param {number} br - Background red.
+   * @param {number} bg - Background green.
+   * @param {number} bb - Background blue.
+   * @param {number} ar - Accent red.
+   * @param {number} ag - Accent green.
+   * @param {number} ab - Accent blue.
+   * @param {number} tr - Font tracking (rem).
+   * @param {number} sp - Transition speed (ms).
+   * @param {number} sat - Saturation (0–1).
+   * @param {number} con - Contrast ratio (1.5–4.5).
+   * @param {number} gap - Grid gap (rem).
+   * @param {number} blr - Blur (px).
+   * @param {number} den - Layout density (0.5–1.0).
+   * @param {number} shd - Shadow alpha (0–1).
    * @returns {void}
    */
-  #applyCSS(br, bg, bb, ar, ag, ab, tr, sp) {
+  #applyCSS(br, bg, bb, ar, ag, ab, tr, sp, sat, con, gap, blr, den, shd) {
     if (typeof document === 'undefined' || !document.documentElement) return;
 
     const root = document.documentElement;
@@ -506,10 +656,14 @@ export default class BiomorphicEngine {
       `rgb(${Math.round(br)}, ${Math.round(bg)}, ${Math.round(bb)})`);
     root.style.setProperty(pfx + 'accent-color',
       `rgb(${Math.round(ar)}, ${Math.round(ag)}, ${Math.round(ab)})`);
-    root.style.setProperty(pfx + 'font-tracking',
-      tr.toFixed(3) + 'rem');
-    root.style.setProperty(pfx + 'transition-speed',
-      Math.round(sp) + 'ms');
+    root.style.setProperty(pfx + 'font-tracking', tr.toFixed(3) + 'rem');
+    root.style.setProperty(pfx + 'transition-speed', Math.round(sp) + 'ms');
+    root.style.setProperty(pfx + 'saturation', sat.toFixed(3));
+    root.style.setProperty(pfx + 'contrast', con.toFixed(2));
+    root.style.setProperty(pfx + 'grid-gap', gap.toFixed(2) + 'rem');
+    root.style.setProperty(pfx + 'blur', Math.round(blr) + 'px');
+    root.style.setProperty(pfx + 'density', den.toFixed(3));
+    root.style.setProperty(pfx + 'shadow', shd.toFixed(3));
   }
 
   // ---------------------------------------------------------------------------
@@ -517,36 +671,21 @@ export default class BiomorphicEngine {
   // ---------------------------------------------------------------------------
 
   /**
-   * Schedules the `requestAnimationFrame` interpolation loop if not already
-   * active.
-   *
-   * The loop is one-shot: each frame schedules the next only if convergence
-   * has not been reached. At steady state the CPU is completely idle.
+   * Schedules the `requestAnimationFrame` interpolation loop if not active.
    *
    * @returns {void}
    */
   #scheduleFrame() {
     if (this.#running) return;
-
     this.#running = true;
     this.#frameCount = 0;
     this.#lastFrameTime = performance.now();
-
     if (this.#boundTick === null) this.#boundTick = this.#tick.bind(this);
-
     this.#rafId = requestAnimationFrame(this.#boundTick);
   }
 
   /**
    * Stops the animation loop and releases the rAF callback handle.
-   *
-   * After `#stop()`:
-   * - rAF callback is cancelled.
-   * - `#rafId` is nullified (enables GC).
-   * - `#running` is `false`.
-   * - All filter states and visual values are preserved.
-   *
-   * The loop restarts automatically on the next `ingest()` call.
    *
    * @returns {void}
    */
@@ -563,31 +702,58 @@ export default class BiomorphicEngine {
 // =============================================================================
 
 /**
+ * Multi-channel telemetry input payload.
+ *
+ * All values are optional; only provided channels are updated. Values are
+ * clamped to [0, 100] and rounded to 3 decimal places.
+ *
+ * @typedef {Object} BiomorphicInput
+ * @property {number} [cognitiveLoad]    - Mental effort / task difficulty.
+ * @property {number} [focus]            - Concentration level.
+ * @property {number} [anxiety]          - Stress / anxiety level.
+ * @property {number} [sleepDeprivation] - Fatigue from insufficient rest.
+ */
+
+/**
+ * Snapshot of the engine's current neural state.
+ *
+ * @typedef {Object} BiomorphicState
+ * @property {number} cognitiveLoad    - Smoothed cognitive load (0–100).
+ * @property {number} focus            - Smoothed focus (0–100).
+ * @property {number} anxiety          - Smoothed anxiety (0–100).
+ * @property {number} sleepDeprivation - Smoothed sleep deprivation (0–100).
+ * @property {number} fatigue          - Computed long-term fatigue (0–100).
+ * @property {number} arousal          - Computed alertness (0–100).
+ * @property {number} valence          - Computed emotional polarity (0–100).
+ */
+
+/**
+ * All computed visual values for the current frame.
+ *
+ * @typedef {Object} BiomorphicVisuals
+ * @property {number} bgR         - Background red channel (0–255).
+ * @property {number} bgG         - Background green channel (0–255).
+ * @property {number} bgB         - Background blue channel (0–255).
+ * @property {number} accR        - Accent red channel (0–255).
+ * @property {number} accG        - Accent green channel (0–255).
+ * @property {number} accB        - Accent blue channel (0–255).
+ * @property {number} track       - Font tracking in rem.
+ * @property {number} speed       - Transition duration in ms.
+ * @property {number} saturation  - Color saturation (0.10–1.00).
+ * @property {number} contrast    - Contrast ratio (1.5–4.5).
+ * @property {number} gridGap     - Layout grid gap in rem.
+ * @property {number} blur        - Background blur in px.
+ * @property {number} density     - Layout density scale (0.5–1.0).
+ * @property {number} shadowAlpha - Shadow opacity (0–0.30).
+ */
+
+/**
  * BiomorphicEngine configuration object.
  *
  * @typedef {Object} BiomorphicConfig
- * @property {number} [LOAD_MIN=0]           - Minimum valid cognitive load.
- * @property {number} [LOAD_MAX=100]         - Maximum valid cognitive load.
- * @property {number} [CONVERGENCE_THRESHOLD=0.005] - Loop-stop threshold
- *     (normalised difference from target).
+ * @property {number} [LOAD_MIN=0]           - Minimum valid input.
+ * @property {number} [LOAD_MAX=100]         - Maximum valid input.
+ * @property {number} [CONVERGENCE_THRESHOLD=0.005] - Loop-stop threshold.
  * @property {number} [MAX_FRAMES=30000]     - Safety limit on animation frames.
  * @property {number} [PINK_OCTAVES=7]       - Octave count for pink noise.
- */
-
-/**
- * Snapshot of the engine's current state.
- *
- * @typedef {Object} BiomorphicState
- * @property {number} cognitiveLoad - Current processed cognitive load (0–100).
- * @property {number} fatigue       - Current fatigue estimate (0–100).
- */
-
-/**
- * Visual values currently applied to CSS Custom Properties.
- *
- * @typedef {Object} BiomorphicVisuals
- * @property {string} bgColor        - CSS background colour value.
- * @property {string} accentColor    - CSS accent colour value.
- * @property {number} fontTracking   - Letter-spacing in rem.
- * @property {number} transitionSpeed - Transition duration in ms.
  */

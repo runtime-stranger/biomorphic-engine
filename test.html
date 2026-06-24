@@ -3,135 +3,199 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BiomorphicEngine Test</title>
+<title>BiomorphicEngine v2 Test</title>
 <style>
+  * { box-sizing: border-box; }
   body {
     background-color: var(--bui-bg-color, #f8f9fa);
     color: var(--bui-accent-color, #0066cc);
     letter-spacing: var(--bui-font-tracking, 0.02rem);
-    transition: all var(--bui-transition-speed, 200ms) ease;
+    transition: background-color var(--bui-transition-speed, 200ms) ease,
+                color var(--bui-transition-speed, 200ms) ease,
+                letter-spacing var(--bui-transition-speed, 200ms) ease;
     font-family: system-ui, sans-serif;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    margin: 0;
+    margin: 0; padding: 1rem;
   }
   .card {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.08);
     border: 1px solid var(--bui-accent-color);
-    border-radius: 12px;
-    padding: 2rem;
-    max-width: 480px;
-    text-align: center;
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-width: 640px;
+    width: 100%;
+    filter: saturate(var(--bui-saturation, 1));
+    box-shadow: 0 4px 24px rgba(0,0,0,var(--bui-shadow, 0));
   }
-  h1 { margin-top: 0; }
-  input[type="range"] { width: 100%; margin: 1rem 0; }
-  .val { font-size: 2rem; font-weight: bold; }
-  .row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  h1 { margin: 0 0 0.2rem; font-size: 1.2rem; }
+  .sub { opacity: 0.4; font-size: 0.75rem; margin-bottom: 0.8rem; }
+  hr { border: none; border-top: 1px solid var(--bui-accent-color); opacity: 0.12; margin: 0.8rem 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bui-grid-gap, 0.5rem); margin: 0.5rem 0; }
+  .grid-item { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+  .grid-item label { display: block; opacity: 0.4; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .grid-item .value { font-weight: 700; font-size: 1rem; }
+  input[type="range"] { width: 100%; margin: 0.2rem 0 0.4rem; accent-color: var(--bui-accent-color); height: 4px; }
+  .row { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: center; }
   button {
-    background: var(--bui-accent-color);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 0.6rem 1.4rem;
-    cursor: pointer;
-    font-size: 1rem;
+    background: var(--bui-accent-color); color: #fff; border: none;
+    border-radius: 6px; padding: 0.3rem 0.7rem; cursor: pointer;
+    font-size: 0.75rem; transition: opacity 0.2s;
   }
-  button:hover { opacity: 0.85; }
-  button.danger { background: #c0392b; }
-  pre { font-size: 0.8rem; text-align: left; background: rgba(0,0,0,0.2); padding: 0.8rem; border-radius: 6px; overflow-x: auto; }
+  button:hover { opacity: 0.8; }
+  .danger { background: #c0392b; }
+  .vars { font-size: 0.65rem; font-family: 'Courier New', monospace; margin-top: 0.5rem; }
+  .vars div { display: flex; justify-content: space-between; padding: 0.1rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .vars .k { opacity: 0.4; }
+  .vars .v { font-weight: 600; }
+  pre { font-size: 0.65rem; background: rgba(0,0,0,0.08); padding: 0.4rem; border-radius: 4px; overflow: auto; margin: 0.3rem 0 0; }
+  #dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; }
+  #dot.g { background: #2ecc71; } #dot.y { background: #f1c40f; } #dot.r { background: #e74c3c; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>🧠 BiomorphicEngine</h1>
-    <p><strong>--bui-bg-color:</strong> <span id="lbl-bg">#f8f9fa</span></p>
-    <p><strong>--bui-accent-color:</strong> <span id="lbl-accent">#0066cc</span></p>
-    <p><strong>--bui-font-tracking:</strong> <span id="lbl-tracking">0.020</span>rem</p>
-    <p><strong>--bui-transition-speed:</strong> <span id="lbl-speed">200</span>ms</p>
-    <hr>
-    <label>Bilişsel Yük (0–100): <span id="lbl-load" class="val">0</span></label>
-    <input type="range" id="slider" min="0" max="100" value="0" step="0.1">
-    <div class="row">
-      <button id="btn-ingest">Ingest Değeri</button>
-      <button id="btn-rand">Rastgele (0–100)</button>
-      <button id="btn-sweep">Sweep (0→100→0)</button>
-      <button class="danger" id="btn-destroy">Destroy</button>
+<div class="card">
+  <h1>BiomorphicEngine v2</h1>
+  <div class="sub">4 kanallı nöral girdi · 1/f + 1/f² gürültü · 10 CSS değişkeni</div>
+
+  <div class="grid" id="sliders">
+    <div class="grid-item">
+      <label>🧠 Bilişsel Yük</label>
+      <div class="value" id="v-cl">0</div>
+      <input type="range" id="s-cl" min="0" max="100" value="0" step="0.1">
     </div>
-    <hr>
-    <pre id="state">engine başlatılıyor...</pre>
+    <div class="grid-item">
+      <label>🎯 Odak</label>
+      <div class="value" id="v-fo">100</div>
+      <input type="range" id="s-fo" min="0" max="100" value="100" step="0.1">
+    </div>
+    <div class="grid-item">
+      <label>😰 Anksiyete</label>
+      <div class="value" id="v-an">0</div>
+      <input type="range" id="s-an" min="0" max="100" value="0" step="0.1">
+    </div>
+    <div class="grid-item">
+      <label>😴 Uykusuzluk</label>
+      <div class="value" id="v-sd">0</div>
+      <input type="range" id="s-sd" min="0" max="100" value="0" step="0.1">
+    </div>
   </div>
+
+  <div class="row">
+    <button id="b-go">▶ Gönder</button>
+    <button id="b-preset1">😌 Sakin Odak</button>
+    <button id="b-preset2">😰 Yüksek Anksiyete</button>
+    <button id="b-preset3">🥱 Çok Yorgun</button>
+    <button id="b-preset4">🔥 Aşırı Yük</button>
+    <button class="danger" id="b-destroy">× Destroy</button>
+  </div>
+
+  <hr>
+
+  <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:0.3rem">
+    <span><span id="dot" class="g"></span> <span id="stxt">hazır</span></span>
+    <span id="tick-info">0</span>
+  </div>
+
+  <div class="vars" id="css-vars"></div>
+  <pre id="state">{}</pre>
+</div>
 
 <script type="module">
 import BiomorphicEngine from './BiomorphicEngine.js';
 
-const engine = new BiomorphicEngine();
+const eng = new BiomorphicEngine();
 const $ = id => document.getElementById(id);
-const slider = $('slider');
-const lblLoad = $('lbl-load');
-const stateEl = $('state');
 
-function updateUI() {
-  const s = engine.getState();
-  const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bui-bg-color').trim();
-  const acc = getComputedStyle(document.documentElement).getPropertyValue('--bui-accent-color').trim();
-  const tr  = getComputedStyle(document.documentElement).getPropertyValue('--bui-font-tracking').trim();
-  const sp  = getComputedStyle(document.documentElement).getPropertyValue('--bui-transition-speed').trim();
+function readVal(id) { return parseFloat($(id).value); }
+function setVal(id, v) { $(id).value = v; $(id.replace('s-','v-')).textContent = v.toFixed(1); }
 
-  $('lbl-bg').textContent = bg || '—';
-  $('lbl-accent').textContent = acc || '—';
-  $('lbl-tracking').textContent = tr || '—';
-  $('lbl-speed').textContent = sp || '—';
-
-  stateEl.textContent = JSON.stringify(s, null, 2);
+function sendAll() {
+  eng.ingest({
+    cognitiveLoad: readVal('s-cl'),
+    focus: readVal('s-fo'),
+    anxiety: readVal('s-an'),
+    sleepDeprivation: readVal('s-sd')
+  });
 }
 
-$('btn-ingest').addEventListener('click', () => {
-  const val = parseFloat(slider.value);
-  engine.ingest(val);
-  lblLoad.textContent = val.toFixed(1);
-  setTimeout(updateUI, 50);
+const sliders = ['s-cl','s-fo','s-an','s-sd'];
+sliders.forEach(id => {
+  $(id).oninput = () => {
+    const v = parseFloat($(id).value);
+    $(id.replace('s-','v-')).textContent = v.toFixed(1);
+  };
 });
 
-$('btn-rand').addEventListener('click', () => {
-  const val = Math.round(Math.random() * 1000) / 10;
-  slider.value = val;
-  lblLoad.textContent = val.toFixed(1);
-  engine.ingest(val);
-  setTimeout(updateUI, 50);
-});
+$('b-go').onclick = sendAll;
 
-let sweepId = null;
-$('btn-sweep').addEventListener('click', () => {
-  if (sweepId) { clearInterval(sweepId); sweepId = null; return; }
-  let dir = 1; let v = 0;
-  sweepId = setInterval(() => {
-    v += dir * 5;
-    if (v >= 100) { v = 100; dir = -1; }
-    if (v <= 0) { v = 0; dir = 1; clearInterval(sweepId); sweepId = null; }
-    slider.value = v; lblLoad.textContent = v.toFixed(1);
-    engine.ingest(v);
-    setTimeout(updateUI, 30);
-  }, 300);
-});
+const presets = {
+  'b-preset1':  { cl: 30, fo: 85, an: 10, sd: 15, label: 'Sakin Odak' },
+  'b-preset2':  { cl: 50, fo: 25, an: 90, sd: 20, label: 'Yüksek Anksiyete' },
+  'b-preset3':  { cl: 40, fo: 30, an: 30, sd: 95, label: 'Çok Yorgun' },
+  'b-preset4':  { cl: 95, fo: 70, an: 80, sd: 60, label: 'Aşırı Yük' },
+};
+for (const [id, p] of Object.entries(presets)) {
+  $(id).onclick = () => {
+    setVal('s-cl', p.cl); setVal('s-fo', p.fo); setVal('s-an', p.an); setVal('s-sd', p.sd);
+    sendAll();
+  };
+}
 
-$('btn-destroy').addEventListener('click', () => {
-  engine.destroy();
-  stateEl.textContent = 'DESTROYED';
-});
+$('b-destroy').onclick = () => {
+  eng.destroy();
+  $('dot').className = 'r'; $('stxt').textContent = 'destroyed';
+  $('state').textContent = 'DESTROYED';
+};
 
-slider.addEventListener('input', () => {
-  lblLoad.textContent = parseFloat(slider.value).toFixed(1);
-});
+function css(key) {
+  return getComputedStyle(document.documentElement).getPropertyValue(key).trim();
+}
 
-// Poll state updates
-setInterval(updateUI, 200);
-updateUI();
+function upd() {
+  const s = eng.getState();
+  const vars = [
+    ['bg-color',       css('--bui-bg-color')],
+    ['accent-color',   css('--bui-accent-color')],
+    ['font-tracking',  css('--bui-font-tracking')],
+    ['transition-speed',css('--bui-transition-speed')],
+    ['saturation',     css('--bui-saturation')],
+    ['contrast',       css('--bui-contrast')],
+    ['grid-gap',       css('--bui-grid-gap')],
+    ['blur',           css('--bui-blur')],
+    ['density',        css('--bui-density')],
+    ['shadow',         css('--bui-shadow')],
+  ];
+  $('css-vars').innerHTML = vars.map(([k,v]) =>
+    `<div><span class="k">--bui-${k}</span><span class="v">${v || '—'}</span></div>`
+  ).join('');
 
-console.log('BiomorphicEngine hazır. engine nesnesi globalde.');
-window.engine = engine;
+  let maxDiff = 0;
+  ['cognitiveLoad','focus','anxiety','sleepDeprivation'].forEach(ch => {
+    const t = parseFloat($('s-' + (ch === 'cognitiveLoad' ? 'cl' : ch === 'focus' ? 'fo' : ch === 'anxiety' ? 'an' : 'sd')).value);
+    const diff = Math.abs(s[ch] - t);
+    if (diff > maxDiff) maxDiff = diff;
+  });
+  $('dot').className = maxDiff < 1 ? 'g' : 'y';
+  $('stxt').textContent = maxDiff < 1 ? 'yakınsadı' : 'yakınsıyor...';
+
+  $('state').textContent = JSON.stringify({
+    cognitiveLoad: +s.cognitiveLoad.toFixed(2),
+    focus: +s.focus.toFixed(2),
+    anxiety: +s.anxiety.toFixed(2),
+    sleepDep: +s.sleepDeprivation.toFixed(2),
+    fatigue: +s.fatigue.toFixed(2),
+    arousal: +s.arousal.toFixed(2),
+    valence: +s.valence.toFixed(2)
+  }, null, 2);
+}
+
+upd();
+setInterval(upd, 150);
+sendAll();
+console.log('✅ BiomorphicEngine v2 hazır');
 </script>
 </body>
 </html>
