@@ -28,7 +28,7 @@ Sistem, kurumsal siber güvenlik denetimlerinden (Audit) ve penetrasyon testleri
 
 ## Siber Güvenlik ve Girdi Sterilizasyonu (Input Sanitization)
 
-Yazılım çekirdeği, `updateSystemicLoad()` metoduna yönlendirilebilecek zararlı veri enjeksiyonlarını (örn: `__proto__` nesne manipülasyonları, `NaN`, `Infinity`, geçersiz dizi veya nesne girdileri) çalışma zamanında (runtime) otomatik olarak tespit eder ve reddeder. Girdiler tamamen sterilize edilerek motorun bir önceki güvenli durumuna dönmesi sağlanır; böylece sistem kilitlenmeleri (DDoS) engellenir. Kod tabanında `eval()` veya `innerHTML` gibi güvensiz fonksiyonlar kesinlikle kullanılmamıştır.
+Yazılım çekirdeği, `ingest()` metoduna yönlendirilebilecek zararlı veri enjeksiyonlarını (örn: `__proto__` nesne manipülasyonları, `NaN`, `Infinity`, geçersiz dizi veya nesne girdileri) çalışma zamanında (runtime) otomatik olarak tespit eder ve reddeder. Girdiler tamamen sterilize edilerek motorun bir önceki güvenli durumuna dönmesi sağlanır; böylece sistem kilitlenmeleri (DDoS) engellenir. Kod tabanında `eval()` veya `innerHTML` gibi güvensiz fonksiyonlar kesinlikle kullanılmamıştır.
 
 ---
 
