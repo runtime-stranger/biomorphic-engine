@@ -1,21 +1,45 @@
-MIT License
+Business Source License 1.1
 
-Copyright (c) 2024-2046
+License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
+"Business Source License" is a trademark of MariaDB Corporation Ab.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+-----------------------------------------------------------------------------
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Parameters
+
+Licensor:             BiomorphicEngine Contributors
+Licensed Work:        BiomorphicEngine
+                      The Licensed Work is (c) 2024-2046
+Additional Use Grant: You may use the Licensed Work in production provided
+                      your revenue does not exceed $1,000,000 (one million US
+                      dollars) per calendar year. If your revenue exceeds this
+                      limit, you must purchase a commercial license from the
+                      Licensor.
+
+Change Date:          2046-12-31
+Change License:       GNU General Public License v2.0 or later
+
+-----------------------------------------------------------------------------
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make the Licensed Work available under a subsequent version of
+the Business Source License, or a different license as specified above.
+
+"Production use" means any use of the Licensed Work where the output or
+service provided to end users interacts directly with the Licensed Work,
+including but not limited to deploying the Licensed Work on production
+servers or incorporating it into a production application.
+
+You may not use the Licensed Work for production use in a manner that
+circumvents the Additional Use Grant.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
