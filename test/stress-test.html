@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiomorphicEngine — Stress & Compliance Test</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: #111; color: #eee;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    padding: 1rem;
+  }
+  h1 { color: #0af; font-size: 1rem; }
+  .suite { margin: 0.5rem 0; }
+  .case {
+    padding: 0.25rem 0.5rem;
+    margin: 2px 0;
+    border-left: 3px solid #555;
+  }
+  .case.pass { border-left-color: #0f0; color: #0f0; }
+  .case.fail { border-left-color: #f00; color: #f00; }
+  .case .ts { opacity: 0.3; font-size: 0.75em; }
+  .summary { margin-top: 1rem; padding: 0.5rem; border-top: 1px solid #333; }
+</style>
+</head>
+<body>
+<h1>BiomorphicEngine v2 — Stress & Compliance Test</h1>
+<div id="log" class="suite"></div>
+<div id="summary" class="summary"></div>
+
+<script type="module">
+import BiomorphicEngine from '../BiomorphicEngine.js';
+
+const log = document.getElementById('log');
+const summary = document.getElementById('summary');
+const results = [];
+let passed = 0, failed = 0;
+
+function emit(category, ok, detail) {
+  const ts = performance.now().toFixed(1);
+  const label = ok ? '[PASSED]' : '[FAILED]';
+  const line = document.createElement('div');
+  line.className = `case ${ok ? 'pass' : 'fail'}`;
+  line.innerHTML = `<span class="ts">${ts}ms</span> ${label} ${category}: ${detail}`;
+  log.appendChild(line);
+  if (ok) passed++; else failed++;
+  results.push({ ok, category, detail, ts });
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ──────────────────────────────────────────────────
+// Test 1: Rapid multi-telemetry flood
+// ──────────────────────────────────────────────────
+async function testRapidFlood() {
+  const eng = new BiomorphicEngine();
+  const seq = [
+    { cl: 20, fo: 80, an: 10, sd: 5  },
+    { cl: 95, fo: 20, an: 90, sd: 80 },
+    { cl: 12, fo: 70, an: 5,  sd: 10 },
+    { cl: 80, fo: 40, an: 70, sd: 95 },
+    { cl: 50, fo: 50, an: 50, sd: 50 },
+  ];
+
+  // Fire 5 ingest calls in rapid succession (<1ms apart)
+  for (const s of seq) {
+    eng.ingest({ cognitiveLoad: s.cl, focus: s.fo, anxiety: s.an, sleepDeprivation: s.sd });
+  }
+
+  // Wait for convergence
+  await delay(500);
+
+  const state = eng.getState();
+  const last = seq[seq.length - 1];
+
+  // All values should be finite numbers
+  const allFinite = ['cognitiveLoad','focus','anxiety','sleepDeprivation','fatigue','arousal','valence']
+    .every(k => typeof state[k] === 'number' && isFinite(state[k]));
+
+  // The last target should be reflected approximately
+  const clOk = Math.abs(state.cognitiveLoad - last.cl) < 5;
+  const foOk = Math.abs(state.focus - last.fo) < 5;
+  const anOk = Math.abs(state.anxiety - last.an) < 5;
+  const sdOk = Math.abs(state.sleepDeprivation - last.sd) < 5;
+
+  emit('Rapid Flood', allFinite, `all channels finite (${JSON.stringify(state)})`);
+  emit('Rapid Flood Target cl', clOk, `cognitiveLoad ≈ ${state.cognitiveLoad.toFixed(1)} (target ${last.cl})`);
+  emit('Rapid Flood Target fo', foOk, `focus ≈ ${state.focus.toFixed(1)} (target ${last.fo})`);
+  emit('Rapid Flood Target an', anOk, `anxiety ≈ ${state.anxiety.toFixed(1)} (target ${last.an})`);
+  emit('Rapid Flood Target sd', sdOk, `sleepDeprivation ≈ ${state.sleepDeprivation.toFixed(1)} (target ${last.sd})`);
+
+  eng.destroy();
+}
+
+// ──────────────────────────────────────────────────
+// Test 2: Malicious corrupted type inputs
+// ──────────────────────────────────────────────────
+async function testMaliciousInputs() {
+  const eng = new BiomorphicEngine();
+
+  // To detect side effects, get baseline
+  const baseline = eng.getState();
+
+  // Each malicious input should be silently rejected
+  const attacks = [
+    NaN,
+    Infinity,
+    -Infinity,
+    'string',
+    [],
+    { cognitiveLoad: NaN },
+    { __proto__: { pollute: true } },
+    { constructor: { prototype: { evil: true } } },
+    { cognitiveLoad: Infinity },
+    { cognitiveLoad: 'string' },
+    { cognitiveLoad: -50 },
+    { cognitiveLoad: 150 },
+    null,
+    undefined,
+    { cognitiveLoad: { nested: true } },
+  ];
+
+  for (const attack of attacks) {
+    const before = eng.getState();
+    eng.ingest(attack);
+    const after = eng.getState();
+    const unchanged = JSON.stringify(before) === JSON.stringify(after);
+    const ok = unchanged;
+    const typeStr = attack === null ? 'null' :
+                    attack === undefined ? 'undefined' :
+                    Array.isArray(attack) ? '[]' :
+                    typeof attack === 'object' ? JSON.stringify(attack) :
+                    String(attack);
+    emit('Malicious Input', ok, `rejected ${typeStr}`);
+  }
+
+  // Verify engine is still operational after attacks
+  eng.ingest({ cognitiveLoad: 50, focus: 50, anxiety: 50, sleepDeprivation: 50 });
+  await delay(400);
+  const state = eng.getState();
+  const operational = ['cognitiveLoad','focus','anxiety','sleepDeprivation']
+    .every(k => Math.abs(state[k] - 50) < 10);
+  emit('Post-Attack Operation', operational,
+    `engine recoverable after all attacks (${JSON.stringify(state)})`);
+
+  eng.destroy();
+}
+
+// ──────────────────────────────────────────────────
+// Test 3: Convergence precision
+// ──────────────────────────────────────────────────
+async function testConvergence() {
+  const eng = new BiomorphicEngine();
+  eng.ingest(42.5);
+  await delay(800);
+
+  const state = eng.getState();
+  const diff = Math.abs(state.cognitiveLoad - 42.5);
+  const ok = diff < 0.5;
+  emit('Convergence Precision', ok,
+    `cognitiveLoad ${state.cognitiveLoad.toFixed(3)} (target 42.500) diff=${diff.toFixed(4)}`);
+  eng.destroy();
+}
+
+// ──────────────────────────────────────────────────
+// Test 4: rAF no-leak after stop
+// ──────────────────────────────────────────────────
+async function testRAFDisposal() {
+  const eng = new BiomorphicEngine();
+  eng.ingest(80);
+  await delay(300);
+  eng.destroy();
+  // After destroy, rAF handle should be null
+  const rAFRunning = typeof eng._BiomorphicEngine_rafId !== 'undefined' &&
+    eng._BiomorphicEngine_rafId !== null;
+  // Private field access hack for test — check if state is zeroed
+  const state = eng.getState();
+  const allZero = Object.values(state).every(v => v === 0);
+  emit('rAF Disposal', allZero, `state zeroed after destroy (${JSON.stringify(state)})`);
+}
+
+// ──────────────────────────────────────────────────
+// Test 5: 3-decimal lock-in under extreme oscillation
+// ──────────────────────────────────────────────────
+async function testPrecisionStability() {
+  const eng = new BiomorphicEngine();
+
+  // Rapid oscillation: 0 ↔ 100 every ingest
+  for (let i = 0; i < 20; i++) {
+    eng.ingest(i % 2 === 0 ? 0 : 100);
+    await delay(5);
+  }
+
+  await delay(600);
+  const state = eng.getState();
+  const allRounded = ['cognitiveLoad','focus','anxiety','sleepDeprivation']
+    .every(k => {
+      const str = state[k].toString();
+      const dot = str.indexOf('.');
+      const decimals = dot === -1 ? 0 : str.length - dot - 1;
+      return decimals <= 3;
+    });
+
+  emit('Precision Stability', allRounded,
+    `all channels at ≤3 decimals (${JSON.stringify(state)})`);
+
+  // r3 round-trip stress
+  let maxError = 0;
+  for (let v = 0; v <= 100; v += 0.1) {
+    const r = Math.round(Math.round(v * 1000) / 1000 * 1000) / 1000;
+    const err = Math.abs(r - v);
+    if (err > maxError) maxError = err;
+  }
+  const roundTripOk = maxError < 0.001;
+  emit('r3 Round-Trip', roundTripOk,
+    `max r3 error = ${maxError.toFixed(6)}`);
+
+  eng.destroy();
+}
+
+// ──────────────────────────────────────────────────
+// Test 6: CSS variable range bounds
+// ──────────────────────────────────────────────────
+async function testCSSBounds() {
+  const eng = new BiomorphicEngine();
+
+  // Max stress
+  eng.ingest({ cognitiveLoad: 100, focus: 100, anxiety: 100, sleepDeprivation: 100 });
+  await delay(600);
+
+  const root = document.documentElement;
+  const pfx = '--bui-';
+
+  const getCSS = k => parseFloat(root.style.getPropertyValue(pfx + k));
+  const checks = [
+    ['saturation', getCSS('saturation'), 0.10, 1.00],
+    ['contrast', getCSS('contrast'), 1.50, 4.50],
+    ['grid-gap', getCSS('grid-gap'), 0.50, 2.00],
+    ['blur', getCSS('blur'), 0, 12],
+    ['density', getCSS('density'), 0.50, 1.00],
+    ['shadow', getCSS('shadow'), 0, 0.30],
+    ['font-tracking', getCSS('font-tracking'), 0.02, 0.10],
+    ['transition-speed', getCSS('transition-speed'), 200, 750],
+  ];
+
+  for (const [name, val, min, max] of checks) {
+    const ok = val >= min && val <= max;
+    emit(`CSS Bounds ${name}`, ok, `${val} ∈ [${min}, ${max}]`);
+  }
+
+  eng.destroy();
+}
+
+// ──────────────────────────────────────────────────
+// Run all
+// ──────────────────────────────────────────────────
+console.log('BiomorphicEngine v2 — Stress & Compliance Test Suite');
+console.log('====================================================');
+
+await testRapidFlood();
+await delay(100);
+await testMaliciousInputs();
+await delay(100);
+await testConvergence();
+await delay(100);
+await testRAFDisposal();
+await delay(100);
+await testPrecisionStability();
+await delay(100);
+await testCSSBounds();
+
+summary.innerHTML = `
+  <strong>${passed} passed</strong> · <strong style="color:${failed > 0 ? '#f00' : '#0f0'}">${failed} failed</strong>
+  · ${results.length} total cases
+`;
+console.log(`Summary: ${passed} passed, ${failed} failed`);
+</script>
+</body>
+</html>

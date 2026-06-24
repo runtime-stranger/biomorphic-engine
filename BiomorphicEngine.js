@@ -128,10 +128,10 @@ export default class BiomorphicEngine {
 
     /** Multi-time-constant filter coefficients (1/f spectrum approximation). */
     FILTER: Object.freeze({
-      FAST:       0.25,
-      MEDIUM:     0.08,
-      SLOW:       0.02,
-      ULTRA_SLOW: 0.005
+      FAST:       0.60,
+      MEDIUM:     0.35,
+      SLOW:       0.20,
+      ULTRA_SLOW: 0.10
     }),
 
     /** Weights for combining filter stages into perceived value. */
@@ -189,6 +189,8 @@ export default class BiomorphicEngine {
   #running = false;
   /** Frame counter for safety-limit enforcement. @type {number} */
   #frameCount = 0;
+  /** Previous frame's output per channel (for frame-delta snap detection). @type {number[]} */
+  #prevOutput;
   /** Timestamp of the most recent animation frame (ms). @type {number} */
   #lastFrameTime = 0;
 
@@ -214,6 +216,8 @@ export default class BiomorphicEngine {
       this.#target.push(0);
       this.#output.push(0);
     }
+
+    this.#prevOutput = [0, 0, 0, 0];
 
     const N = BiomorphicEngine.#CFG.NORMAL;
     this.#applyCSS(
@@ -336,6 +340,7 @@ export default class BiomorphicEngine {
     this.#fatigue = 0; this.#arousal = 0; this.#valence = 0;
     this.#brownAccum = 0;
     this.#pinkVals.fill(0); this.#pinkCtr = 0;
+    this.#prevOutput = [0, 0, 0, 0];
     this.#frameCount = 0; this.#lastFrameTime = 0;
   }
 
@@ -448,6 +453,18 @@ export default class BiomorphicEngine {
         f[0] * W1 + f[1] * W2 + f[2] * W3 + f[3] * W4,
         0, 100
       ));
+
+      // Terminal snap: when the per-frame delta drops below precision
+      // threshold, snap to exact target to guarantee clean convergence.
+      // This eliminates the asymptotic tail of the 1/f IIR filter.
+      const prev = this.#prevOutput[c];
+      const frameDelta = Math.abs(this.#output[c] - prev);
+      const absDelta = Math.abs(this.#output[c] - tgt);
+      if (frameDelta < 0.01 || absDelta / 100 < BiomorphicEngine.#CFG.CONVERGENCE_THRESHOLD) {
+        this.#output[c] = tgt;
+        f[0] = tgt; f[1] = tgt; f[2] = tgt; f[3] = tgt;
+      }
+      this.#prevOutput[c] = this.#output[c];
     }
 
     const cl = this.#output[0];
@@ -456,12 +473,13 @@ export default class BiomorphicEngine {
     const sleepDep = this.#output[3];
 
     // Fatigue: long-term accumulation (ultra-slow cognitive load)
-    // + sleep deprivation + anxiety component
+    // + sleep deprivation + anxiety component + 1/f² brown noise drift
     this.#fatigue = r3(clamp(
       this.#filter[0][3] * 0.35 +   // ultra-slow drift
       cl * 0.15 +                   // current cognitive load
       sleepDep * 0.30 +             // sleep deprivation
-      anxiety * 0.20,               // anxiety contribution
+      anxiety * 0.20 +              // anxiety contribution
+      r3(this.#brownNoise() * 1.5), // 1/f² long-term drift (±1.5 pts)
       0, 100
     ));
 
@@ -477,12 +495,25 @@ export default class BiomorphicEngine {
   // ---------------------------------------------------------------------------
 
   /**
-   * Applies non-linear power-law shaping to an interpolation factor `t`.
+   * Stable non-linear gamma shaping (power law, no per-frame noise).
+   * Used for CSS properties where frame-to-frame jitter would be distracting.
    *
    * @param {number} t - Interpolation factor in [0, 1].
    * @returns {number} Shaped factor in [0, 1] (3 decimals).
    */
-  #shapeNonLinear(t) {
+  #shapeGamma(t) {
+    return r3(Math.pow(clamp(t, 0, 1), 0.85));
+  }
+
+  /**
+   * Noise-shaped power-law for organic color transitions.
+   * Pink noise modulates the gamma exponent each frame, creating
+   * biologically-plausible micro-variation in the visual palette.
+   *
+   * @param {number} t - Interpolation factor in [0, 1].
+   * @returns {number} Shaped factor in [0, 1] (3 decimals).
+   */
+  #shapeNoisy(t) {
     const ts = clamp(t, 0, 1);
     const g  = r3(clamp(0.85 + this.#pinkNoise() * 0.30, 0.10, 2.00));
     return r3(Math.pow(ts, g));
@@ -514,52 +545,55 @@ export default class BiomorphicEngine {
     const sleepDep = this.#output[3];
     const fatigueT = r3(clamp(this.#fatigue / 100, 0, 1));
 
-    // ---- Core palette (existing) ----
+    // ---- Core palette (existing) — noise-shaped for organic color drift ----
     const N = BiomorphicEngine.#CFG.NORMAL;
     const G = BiomorphicEngine.#CFG.NEON_GOTHIC;
-    const ts = this.#shapeNonLinear(fatigueT);
+    const ts = this.#shapeNoisy(fatigueT);
 
     const bgR = r3(N.BG[0] + (G.BG[0] - N.BG[0]) * ts);
     const bgG = r3(N.BG[1] + (G.BG[1] - N.BG[1]) * ts);
     const bgB = r3(N.BG[2] + (G.BG[2] - N.BG[2]) * ts);
 
-    // Accent: blend fatigue and arousal
+    // Accent: blend fatigue and arousal — noise-shaped
     const accentT = r3(clamp((this.#fatigue * 0.60 + this.#arousal * 0.40) / 100, 0, 1));
-    const accentTs = this.#shapeNonLinear(accentT);
+    const accentTs = this.#shapeNoisy(accentT);
     const accR = r3(N.ACCENT[0] + (G.ACCENT[0] - N.ACCENT[0]) * accentTs);
     const accG = r3(N.ACCENT[1] + (G.ACCENT[1] - N.ACCENT[1]) * accentTs);
     const accB = r3(N.ACCENT[2] + (G.ACCENT[2] - N.ACCENT[2]) * accentTs);
 
-    // Font tracking: fatigue + anxiety
-    const trackRaw = r3(0.02 + ((this.#fatigue * 0.50 + anxiety * 0.50) / 100) * 0.08);
-    const track = r3(clamp(trackRaw, 0.02, 0.10));
+    // ---- Stable gamma-shaped properties (no per-frame noise) ----
 
-    // Transition speed: fatigue-driven
-    const speed = r3(clamp(200 + (this.#fatigue / 100) * 550, 200, 750));
+    // Font tracking: fatigue + anxiety → non-linear widening
+    const trackBlend = r3(clamp((this.#fatigue * 0.50 + anxiety * 0.50) / 100, 0, 1));
+    const track = r3(clamp(0.02 + this.#shapeGamma(trackBlend) * 0.08, 0.02, 0.10));
 
-    // ---- New CSS variables ----
+    // Transition speed: fatigue → non-linear slowing
+    const speed = r3(clamp(200 + this.#shapeGamma(fatigueT) * 550, 200, 750));
 
-    // Saturation: high anxiety/sleepDep/fatigue → desaturated
-    const satRaw = r3(1.00 - (anxiety * 0.004 + sleepDep * 0.003 + this.#fatigue * 0.003));
-    const saturation = r3(clamp(satRaw, 0.10, 1.00));
+    // Saturation: stress blend → non-linear desaturation
+    const satBlend = r3(clamp((anxiety * 0.004 + sleepDep * 0.003 + this.#fatigue * 0.003) / 0.90, 0, 1));
+    const saturation = r3(clamp(1.00 - this.#shapeGamma(satBlend) * 0.90, 0.10, 1.00));
 
-    // Contrast: high focus → higher contrast, attenuated by fatigue
-    const contRaw = r3(1.50 + (focus / 100) * 3.00 - (this.#fatigue / 100) * 0.50);
-    const contrast = r3(clamp(contRaw, 1.50, 4.50));
+    // Contrast: focus → non-linear boost, attenuated by fatigue gamma
+    const contBlend = r3(clamp(focus / 100, 0, 1));
+    const contAtten = r3(clamp(1 - this.#shapeGamma(fatigueT) * 0.15, 0, 1));
+    const contrast = r3(clamp(1.50 + this.#shapeGamma(contBlend) * 3.00 * contAtten, 1.50, 4.50));
 
-    // Grid gap: anxiety + fatigue → more breathing room
-    const gapRaw = r3(0.50 + (anxiety * 0.005 + this.#fatigue * 0.005));
-    const gridGap = r3(clamp(gapRaw, 0.50, 2.00));
+    // Grid gap: anxiety + fatigue → non-linear spacing
+    const gapBlend = r3(clamp((anxiety + this.#fatigue) / 200, 0, 1));
+    const gridGap = r3(clamp(0.50 + this.#shapeGamma(gapBlend) * 1.50, 0.50, 2.00));
 
-    // Blur: fatigue + anxiety → calming blur
-    const blurRaw = r3(this.#fatigue * 0.006 + anxiety * 0.004);
-    const blur = r3(clamp(blurRaw, 0, 12));
+    // Blur: fatigue + anxiety → non-linear calming blur
+    const blurBlend = r3(clamp((this.#fatigue * 0.006 + anxiety * 0.004) / 12, 0, 1));
+    const blur = r3(clamp(this.#shapeGamma(blurBlend) * 12, 0, 12));
 
-    // Layout density: high focus → compact; low focus → spacious
-    const density = r3(clamp(1.00 - (100 - focus) * 0.005, 0.50, 1.00));
+    // Layout density: low focus → non-linear spaciousness
+    const denBlend = r3(clamp((100 - focus) / 100, 0, 1));
+    const density = r3(clamp(0.50 + this.#shapeGamma(1 - denBlend) * 0.50, 0.50, 1.00));
 
-    // Shadow: anxiety → more dramatic shadows
-    const shadowAlpha = r3(clamp(anxiety * 0.003, 0, 0.30));
+    // Shadow: anxiety → non-linear shadow alpha
+    const shdBlend = r3(clamp(anxiety / 100, 0, 1));
+    const shadowAlpha = r3(clamp(this.#shapeGamma(shdBlend) * 0.30, 0, 0.30));
 
     return {
       bgR, bgG, bgB,
@@ -600,6 +634,7 @@ export default class BiomorphicEngine {
     );
 
     // Multi-channel convergence check
+    // Snap in #processFilter already sets output=target when within threshold.
     const NC = BiomorphicEngine.#CFG.NUM_CHANNELS;
     const thr = BiomorphicEngine.#CFG.CONVERGENCE_THRESHOLD;
     let maxDiff = 0;
@@ -611,6 +646,7 @@ export default class BiomorphicEngine {
     this.#frameCount++;
 
     if (maxDiff < thr || this.#frameCount >= BiomorphicEngine.#CFG.MAX_FRAMES) {
+      // Final write with exact values
       this.#applyCSS(
         Math.round(v.bgR), Math.round(v.bgG), Math.round(v.bgB),
         Math.round(v.accR), Math.round(v.accG), Math.round(v.accB),

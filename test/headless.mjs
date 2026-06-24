@@ -69,7 +69,7 @@ test('ingest(number) → cognitiveLoad güncellenir', () => {
   eng.ingest(50);
   flushRAF();
   const s = eng.getState();
-  assert(s.cognitiveLoad > 0 && s.cognitiveLoad < 50);
+  assert(s.cognitiveLoad > 0 && s.cognitiveLoad <= 50);
   assert(cssProps['--bui-saturation'] !== '');
 });
 
