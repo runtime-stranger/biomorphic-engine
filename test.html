@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiomorphicEngine Test</title>
+<style>
+  body {
+    background-color: var(--bui-bg-color, #f8f9fa);
+    color: var(--bui-accent-color, #0066cc);
+    letter-spacing: var(--bui-font-tracking, 0.02rem);
+    transition: all var(--bui-transition-speed, 200ms) ease;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+  }
+  .card {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--bui-accent-color);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 480px;
+    text-align: center;
+  }
+  h1 { margin-top: 0; }
+  input[type="range"] { width: 100%; margin: 1rem 0; }
+  .val { font-size: 2rem; font-weight: bold; }
+  .row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  button {
+    background: var(--bui-accent-color);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.4rem;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  button:hover { opacity: 0.85; }
+  button.danger { background: #c0392b; }
+  pre { font-size: 0.8rem; text-align: left; background: rgba(0,0,0,0.2); padding: 0.8rem; border-radius: 6px; overflow-x: auto; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🧠 BiomorphicEngine</h1>
+    <p><strong>--bui-bg-color:</strong> <span id="lbl-bg">#f8f9fa</span></p>
+    <p><strong>--bui-accent-color:</strong> <span id="lbl-accent">#0066cc</span></p>
+    <p><strong>--bui-font-tracking:</strong> <span id="lbl-tracking">0.020</span>rem</p>
+    <p><strong>--bui-transition-speed:</strong> <span id="lbl-speed">200</span>ms</p>
+    <hr>
+    <label>Bilişsel Yük (0–100): <span id="lbl-load" class="val">0</span></label>
+    <input type="range" id="slider" min="0" max="100" value="0" step="0.1">
+    <div class="row">
+      <button id="btn-ingest">Ingest Değeri</button>
+      <button id="btn-rand">Rastgele (0–100)</button>
+      <button id="btn-sweep">Sweep (0→100→0)</button>
+      <button class="danger" id="btn-destroy">Destroy</button>
+    </div>
+    <hr>
+    <pre id="state">engine başlatılıyor...</pre>
+  </div>
+
+<script type="module">
+import BiomorphicEngine from './BiomorphicEngine.js';
+
+const engine = new BiomorphicEngine();
+const $ = id => document.getElementById(id);
+const slider = $('slider');
+const lblLoad = $('lbl-load');
+const stateEl = $('state');
+
+function updateUI() {
+  const s = engine.getState();
+  const bg  = getComputedStyle(document.documentElement).getPropertyValue('--bui-bg-color').trim();
+  const acc = getComputedStyle(document.documentElement).getPropertyValue('--bui-accent-color').trim();
+  const tr  = getComputedStyle(document.documentElement).getPropertyValue('--bui-font-tracking').trim();
+  const sp  = getComputedStyle(document.documentElement).getPropertyValue('--bui-transition-speed').trim();
+
+  $('lbl-bg').textContent = bg || '—';
+  $('lbl-accent').textContent = acc || '—';
+  $('lbl-tracking').textContent = tr || '—';
+  $('lbl-speed').textContent = sp || '—';
+
+  stateEl.textContent = JSON.stringify(s, null, 2);
+}
+
+$('btn-ingest').addEventListener('click', () => {
+  const val = parseFloat(slider.value);
+  engine.ingest(val);
+  lblLoad.textContent = val.toFixed(1);
+  setTimeout(updateUI, 50);
+});
+
+$('btn-rand').addEventListener('click', () => {
+  const val = Math.round(Math.random() * 1000) / 10;
+  slider.value = val;
+  lblLoad.textContent = val.toFixed(1);
+  engine.ingest(val);
+  setTimeout(updateUI, 50);
+});
+
+let sweepId = null;
+$('btn-sweep').addEventListener('click', () => {
+  if (sweepId) { clearInterval(sweepId); sweepId = null; return; }
+  let dir = 1; let v = 0;
+  sweepId = setInterval(() => {
+    v += dir * 5;
+    if (v >= 100) { v = 100; dir = -1; }
+    if (v <= 0) { v = 0; dir = 1; clearInterval(sweepId); sweepId = null; }
+    slider.value = v; lblLoad.textContent = v.toFixed(1);
+    engine.ingest(v);
+    setTimeout(updateUI, 30);
+  }, 300);
+});
+
+$('btn-destroy').addEventListener('click', () => {
+  engine.destroy();
+  stateEl.textContent = 'DESTROYED';
+});
+
+slider.addEventListener('input', () => {
+  lblLoad.textContent = parseFloat(slider.value).toFixed(1);
+});
+
+// Poll state updates
+setInterval(updateUI, 200);
+updateUI();
+
+console.log('BiomorphicEngine hazır. engine nesnesi globalde.');
+window.engine = engine;
+</script>
+</body>
+</html>
