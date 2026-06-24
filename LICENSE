@@ -7,39 +7,71 @@ License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
 
 Parameters
 
-Licensor:             BiomorphicEngine Contributors
-Licensed Work:        BiomorphicEngine
-                      The Licensed Work is (c) 2024-2046
-Additional Use Grant: You may use the Licensed Work in production provided
-                      your revenue does not exceed $1,000,000 (one million US
-                      dollars) per calendar year. If your revenue exceeds this
-                      limit, you must purchase a commercial license from the
-                      Licensor.
-
-Change Date:          2046-12-31
-Change License:       GNU General Public License v2.0 or later
+Licensor:             İlkim Önercan
+Licensed Work:        Biomorphic UI Core (including all source code, files, and assets)
+Additional Use:       None. Production use by any commercial entity requires a paid
+                      Commercial License.
+Change Date:          2030-06-24
+Change License:       Apache-2.0
 
 -----------------------------------------------------------------------------
 
 Terms
 
-The Licensor hereby grants you the right to copy, modify, create derivative
-works, redistribute, and make non-production use of the Licensed Work. The
-Licensor may make the Licensed Work available under a subsequent version of
-the Business Source License, or a different license as specified above.
+1. The Licensor hereby grants you the right to copy, modify, create derivative
+   works, use, and distribute the Licensed Work, but only for non-commercial,
+   academic research, or local development and testing purposes.
 
-"Production use" means any use of the Licensed Work where the output or
-service provided to end users interacts directly with the Licensed Work,
-including but not limited to deploying the Licensed Work on production
-servers or incorporating it into a production application.
+2. Any use of the Licensed Work in production environments, commercial SaaS
+   applications, or monetized corporate infrastructures is strictly prohibited
+   without a valid, paid Commercial License purchased directly from the
+   Licensor.
 
-You may not use the Licensed Work for production use in a manner that
-circumvents the Additional Use Grant.
+3. Micro-businesses and independent developers with less than $50,000 in annual
+   gross revenue are exempt from licensing fees for up to 1 active production
+   project.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
+4. Change to Open Source: On the Change Date specified above (or 4 years after
+   the initial release), the Licensed Work will automatically convert and be
+   licensed under the Change License (Apache-2.0), becoming fully Open Source.
+
+For commercial licensing agreements and enterprise support, contact:
+ilkimonrcn@gmail.com
+
+-----------------------------------------------------------------------------
+
+İş Kaynağı Lisansı 1.1 (Business Source License 1.1)
+
+Parametreler:
+
+Lisans Veren:         İlkim Önercan
+Lisanslı Eser:        Biomorphic UI Core (tüm kaynak kodları, dosyalar ve
+                      varlıklar dahil)
+Ek Kullanım:          Yok. Herhangi bir ticari kuruluş tarafından canlı
+                      (üretim) ortamında kullanılması, ücretli bir Ticari
+                      Lisans alınmasını zorunlu kılar.
+Değişim Tarihi:       2030-06-24
+Değişim Lisansı:      Apache-2.0
+
+Şartlar:
+
+1. Lisans Veren; bu belge ile size Lisanslı Eser'i kopyalama, değiştirme,
+   türev eserler oluşturma, kullanma ve dağıtma hakkını yalnızca ticari
+   olmayan amaçlar, akademik araştırmalar veya yerel geliştirme ve test etme
+   süreçleri için ücretsiz olarak tanır.
+
+2. Lisanslı Eser'in canlı (üretim) ortamlarında, ticari SaaS (Yazılım Servisi)
+   uygulamalarında veya gelir getiren kurumsal altyapılarda, Lisans Veren'den
+   doğrudan satın alınmış geçerli, ücretli bir Ticari Lisans olmaksızın
+   kullanılması KESİNLİKLE YASAKTIR.
+
+3. Yıllık brüt geliri 50.000 ABD Doları'ndan az olan mikro işletmeler ve
+   bağımsız geliştiriciler, en fazla 1 aktif canlı (üretim) projesi için
+   lisans ücretlerinden muaftır.
+
+4. Açık Kaynağa Dönüşüm: Yukarıda belirtilen Değişim Tarihinde (veya ilk
+   yayından 4 yıl sonra), Lisanslı Eser otomatik olarak Değişim Lisansı
+   (Apache-2.0) şartlarına geçecek ve tamamen Açık Kaynaklı hale gelecektir.
+
+Ticari lisans sözleşmeleri ve kurumsal entegrasyon desteği için iletişim:
+ilkimonrcn@gmail.com
